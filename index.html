@@ -403,7 +403,7 @@ footer.credit{
 
   <div class="hero">
     <div>
-      <div class="hero-title">Text <em>Readifier</em> <span class="version-tag">v3.3</span></div>
+      <div class="hero-title">Text <em>Readifier</em> <span class="version-tag">v3.4</span></div>
       <div class="hero-sub">cast your chapter · mark delivery · export a narration script</div>
     </div>
     <div class="hero-actions">
@@ -615,14 +615,59 @@ const newId = () => "s" + (seqId++);
 // ---------------------------------------------------------------------------
 // Parsing plain text into the segment model
 // ---------------------------------------------------------------------------
+// Splits a block of text into speech-safe chunks capped at maxWords, ending
+// on sentence boundaries wherever possible. This exists because a single
+// very long utterance (a whole unbroken chapter with no paragraph breaks,
+// for instance) can silently fail - remote/network voices in particular
+// have practical length limits on a single request, unlike local voices
+// which process everything on-device with no such ceiling.
+function splitIntoSpeechChunks(text, maxWords) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return [];
+  const totalWords = trimmed.split(/\s+/).filter(Boolean).length;
+  if (totalWords <= maxWords) return [trimmed]; // already safe, no need to split
+
+  const sentences = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [trimmed];
+  const chunks = [];
+  let current = [];
+  let currentWords = 0;
+
+  for (const sentence of sentences) {
+    const sentenceWords = sentence.trim().split(/\s+/).filter(Boolean);
+    if (sentenceWords.length > maxWords) {
+      // A single sentence longer than the cap on its own - hard-split it by
+      // word count, since there's no sentence boundary to lean on here.
+      if (current.length) { chunks.push(current.join(" ").trim()); current = []; currentWords = 0; }
+      for (let i = 0; i < sentenceWords.length; i += maxWords) {
+        chunks.push(sentenceWords.slice(i, i + maxWords).join(" "));
+      }
+      continue;
+    }
+    if (currentWords + sentenceWords.length > maxWords && current.length) {
+      chunks.push(current.join(" ").trim());
+      current = [];
+      currentWords = 0;
+    }
+    current.push(sentence.trim());
+    currentWords += sentenceWords.length;
+  }
+  if (current.length) chunks.push(current.join(" ").trim());
+  return chunks;
+}
+
+const MAX_UTTERANCE_WORDS = 60;
+
 function parseTextToSegments(raw) {
   const paragraphs = raw.split(/\n\s*\n/).map(p => p.replace(/\s+/g, " ").trim()).filter(Boolean);
   const segs = [];
   paragraphs.forEach((p, i) => {
-    segs.push({
-      id: newId(), type: "speech", text: p, voice: defaultVoice,
-      rate: defaultRate, pitch: effectivePitch(), volume: effectiveVolume(),
-      customDelivery: false,
+    const chunks = splitIntoSpeechChunks(p, MAX_UTTERANCE_WORDS);
+    chunks.forEach(chunk => {
+      segs.push({
+        id: newId(), type: "speech", text: chunk, voice: defaultVoice,
+        rate: defaultRate, pitch: effectivePitch(), volume: effectiveVolume(),
+        customDelivery: false,
+      });
     });
     if (i < paragraphs.length - 1) {
       segs.push({ id: newId(), type: "pause", ms: PARAGRAPH_PAUSE_MS });
