@@ -1,0 +1,1880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text Readifier — Audiobook Casting Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js"></script>
+<style>
+:root{
+  --ink: #1c1b22;
+  --ink-2: #2a2733;
+  --plum: #332c3d;
+  --parchment: #f2ecdd;
+  --parchment-dim: #e4dcc5;
+  --brass: #c9a24b;
+  --brass-bright: #e0b95c;
+  --text-soft: #cfc9d6;
+  --text-faint: #8f889c;
+
+  --swatch-1: #c98a8a; /* dusty rose */
+  --swatch-2: #8fa585; /* sage */
+  --swatch-3: #7d93b8; /* slate blue */
+  --swatch-4: #c9a24b; /* ochre/brass */
+  --swatch-5: #a487b3; /* plum-light */
+  --swatch-6: #6fb0a8; /* teal */
+
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+*{ box-sizing: border-box; }
+
+html,body{
+  margin:0; padding:0;
+  background: radial-gradient(ellipse at top, var(--plum) 0%, var(--ink) 60%);
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+
+::selection{ background: rgba(201,162,75,0.35); }
+
+.app{
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 24px 120px;
+}
+
+/* ---------- Header ---------- */
+.hero{
+  display:flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.hero-title{
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 28px;
+  color: var(--parchment);
+  letter-spacing: 0.2px;
+}
+.hero-title em{
+  font-style: italic;
+  color: var(--brass-bright);
+  font-weight: 500;
+}
+.version-tag{
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--text-faint);
+  vertical-align: middle;
+  letter-spacing: 0.02em;
+}
+.hero-sub{
+  font-size: 13px;
+  color: var(--text-faint);
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.2px;
+}
+.hero-actions{ display:flex; gap:10px; flex-wrap: wrap; }
+
+button{
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-soft);
+  border-radius: 7px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+button:hover{ background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.2); }
+button:focus-visible{ outline: 2px solid var(--brass-bright); outline-offset: 2px; }
+button.primary{
+  background: var(--brass);
+  color: #1c1608;
+  border-color: var(--brass);
+  font-weight: 600;
+}
+button.primary:hover{ background: var(--brass-bright); }
+button:disabled{ opacity: 0.4; cursor: not-allowed; }
+button.small{ padding: 6px 10px; font-size: 12px; }
+button.ghost{ background: transparent; border-color: rgba(255,255,255,0.1); }
+
+input[type="text"], input[type="number"], input[type="password"], select, textarea{
+  font-family: var(--font-body);
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--parchment);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible{
+  outline: 2px solid var(--brass-bright); outline-offset: 1px;
+}
+label{ font-size: 11px; color: var(--text-faint); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.upload-row{
+  display:flex; align-items:center; gap: 10px; flex-wrap: wrap;
+}
+#fileInput{ display:none; }
+
+/* ---------- Layout ---------- */
+.workspace{
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 880px){
+  .workspace{ grid-template-columns: 1fr; }
+}
+
+/* ---------- Manuscript page ---------- */
+.page-card{
+  background: var(--parchment);
+  color: #2a2416;
+  border-radius: 3px;
+  padding: 44px 48px;
+  box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55), 0 2px 0 rgba(255,255,255,0.4) inset;
+  position: relative;
+  min-height: 320px;
+  transition: box-shadow 0.15s ease, outline 0.15s ease;
+}
+.page-card.drag-over{
+  outline: 3px dashed var(--brass);
+  outline-offset: -10px;
+  box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55), 0 0 0 4px rgba(201,162,75,0.25) inset;
+}
+.page-card::before{
+  content:"";
+  position:absolute; inset:0;
+  background: repeating-linear-gradient(180deg, transparent, transparent 27px, rgba(0,0,0,0.025) 28px);
+  pointer-events:none; border-radius: 3px;
+}
+.manuscript{
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.85;
+  position: relative;
+  z-index: 1;
+}
+.manuscript .empty-state{
+  font-family: var(--font-body);
+  color: #8a8168;
+  font-size: 14px;
+  text-align: center;
+  padding: 60px 20px;
+}
+.manuscript .empty-state .big{
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 22px;
+  color: #6b6248;
+  display:block;
+  margin-bottom: 10px;
+}
+
+.seg{
+  border-radius: 3px;
+  padding: 1px 2px;
+  cursor: text;
+  transition: box-shadow 0.15s ease;
+}
+.seg.active-edit{ box-shadow: 0 0 0 2px var(--brass) inset; }
+
+.pause-chip{
+  display:inline-flex;
+  align-items:center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #6b6248;
+  background: rgba(0,0,0,0.06);
+  border: 1px dashed rgba(0,0,0,0.25);
+  border-radius: 20px;
+  padding: 1px 8px;
+  margin: 0 4px;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+}
+.pause-chip:hover{ background: rgba(0,0,0,0.1); }
+.pause-chip .del{ color: #a35; font-weight: 700; margin-left: 3px; }
+
+/* ---------- Casting rail ---------- */
+.rail{
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.panel{
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 16px;
+}
+.panel h3{
+  margin: 0 0 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  font-weight: 500;
+}
+.voice-list{ display:flex; flex-direction:column; gap:6px; max-height: 340px; overflow-y: auto; padding-right: 2px; }
+.voice-item{
+  display:flex; align-items:center; gap:8px;
+  padding: 7px 8px; border-radius: 7px;
+  cursor: pointer; border: 1px solid transparent;
+  font-size: 12.5px;
+  justify-content: space-between;
+}
+.voice-item:hover{ background: rgba(255,255,255,0.05); }
+.voice-item.selected{ border-color: var(--brass); background: rgba(201,162,75,0.12); }
+.voice-item .vi-info{ display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:0; }
+.swatch{ width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.voice-item .vname{ font-weight:600; color: var(--parchment); }
+.voice-item .vdesc{ color: var(--text-faint); font-size: 11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.tv-play{
+  flex-shrink:0;
+  width: 26px; height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.tv-play:hover{ background: var(--brass); color:#1c1608; border-color:var(--brass); }
+.tv-play.is-playing, button.is-playing{
+  background: var(--brass-bright);
+  color: #1c1608;
+  border-color: var(--brass-bright);
+}
+button.is-starting{
+  animation: startingPulse 0.9s ease-in-out infinite;
+}
+@keyframes startingPulse{
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.preview-voice-select{
+  font-size: 10.5px;
+  padding: 2px 4px;
+  max-width: 72px;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--parchment);
+  border-radius: 4px;
+}
+
+.slider-row{ margin-bottom: 12px; }
+.slider-row .valline{ display:flex; justify-content:space-between; font-family: var(--font-mono); font-size:11px; color: var(--text-faint); margin-bottom: 4px;}
+.slider-row input[type=range]{ width:100%; accent-color: var(--brass); }
+
+.preset-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:6px; }
+
+.apply-bar{ display:flex; gap:8px; margin-top: 6px; }
+.apply-bar button{ flex:1; }
+
+.hint{ font-size: 11.5px; color: var(--text-faint); line-height:1.5; }
+
+/* ---------- Legend ---------- */
+.legend{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 0 4px;
+}
+.legend-item{
+  display:flex; align-items:center; gap:6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-soft);
+}
+.legend-item .swatch{ width:10px; height:10px; }
+.legend-custom{ color: var(--text-faint); }
+.legend-note{ color: var(--text-faint); font-style: italic; }
+
+/* ---------- Timeline (signature element) ---------- */
+.timeline-panel{
+  margin-top: 26px;
+}
+.timeline-header{
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom: 10px;
+}
+.timeline-header h3{
+  font-family: var(--font-mono); font-size: 11px; text-transform:uppercase;
+  letter-spacing:0.08em; color: var(--text-faint); margin:0;
+}
+.timeline-meta{ font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+.timeline-track{
+  display:flex;
+  align-items:stretch;
+  height: 46px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+  position: relative;
+}
+.tblock{
+  height:100%;
+  cursor:pointer;
+  position:relative;
+  min-width: 3px;
+  transition: filter 0.15s ease;
+  border-right: 1px solid rgba(0,0,0,0.25);
+}
+.tblock:hover{ filter: brightness(1.25); }
+.tblock.pause{
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,0.06), rgba(255,255,255,0.06) 4px, transparent 4px, transparent 8px);
+}
+.tblock.playing{ box-shadow: inset 0 0 0 2px var(--brass-bright); }
+.playhead{
+  position:absolute; top:0; bottom:0; width:2px; background: var(--brass-bright);
+  box-shadow: 0 0 6px var(--brass-bright);
+  display:none;
+}
+
+/* ---------- Floating selection toolbar ---------- */
+.float-toolbar{
+  position: absolute;
+  display:none;
+  background: var(--ink-2);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 9px;
+  padding: 8px;
+  box-shadow: 0 14px 30px rgba(0,0,0,0.45);
+  z-index: 50;
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 240px;
+}
+.float-toolbar .swatch-btn{
+  width:22px; height:22px; border-radius:50%;
+  border: 2px solid transparent; cursor:pointer;
+}
+.float-toolbar .swatch-btn.chosen{ border-color: var(--brass-bright); }
+.float-toolbar .row{ display:flex; gap:6px; width:100%; flex-wrap:wrap; }
+.toolbar-voice-list{
+  flex-direction: column;
+  max-height: 280px;
+  overflow-y: auto;
+  gap: 3px;
+}
+.toolbar-voice-item{
+  display:flex; align-items:center; justify-content:space-between;
+  border-radius: 6px;
+  padding: 3px 4px 3px 6px;
+}
+.toolbar-voice-item:hover{ background: rgba(255,255,255,0.06); }
+.tv-assign{ display:flex; align-items:center; gap:7px; cursor:pointer; flex:1; min-width:0; }
+.tv-name{ font-size:12.5px; color: var(--parchment); }
+
+footer.credit{
+  text-align:center; margin-top: 30px; font-size: 11px; color: var(--text-faint); font-family: var(--font-mono);
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="hero">
+    <div>
+      <div class="hero-title">Text <em>Readifier</em> <span class="version-tag">v3.3</span></div>
+      <div class="hero-sub">cast your chapter · mark delivery · export a narration script</div>
+    </div>
+    <div class="hero-actions">
+      <div class="upload-row">
+        <button class="ghost" id="loadBtn">Load .txt chapter</button>
+        <input type="file" id="fileInput" accept=".txt">
+        <button class="primary" id="exportBtn" disabled>Export script.json</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div>
+      <div class="page-card" id="pageCard">
+        <input type="text" id="chapterTitle" placeholder="Chapter title…" style="font-family: var(--font-display); font-size:20px; background:transparent; border:none; color:#2a2416; width:100%; margin-bottom:14px; padding:0;">
+        <div class="manuscript" id="manuscript">
+          <div class="empty-state">
+            <span class="big">A blank page.</span>
+            Load a .txt chapter to begin casting voices, or just drag one in here.<br>
+            Select any passage afterward to assign a voice and delivery.
+          </div>
+        </div>
+      </div>
+
+      <div class="legend" id="legend"></div>
+
+      <div class="timeline-panel">
+        <div class="timeline-header">
+          <h3>Narration timeline</h3>
+          <div class="timeline-meta" id="timelineMeta">0 segments · ~0:00 est.</div>
+        </div>
+        <div class="timeline-track" id="timelineTrack">
+          <div class="playhead" id="playhead"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="panel">
+        <h3>Narration defaults</h3>
+        <div class="slider-row">
+          <div class="valline"><span>Speed</span><span id="rateVal">-8%</span></div>
+          <input type="range" id="rateSlider" min="-40" max="40" value="-8" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="valline"><span>Pitch</span><span id="pitchVal">+0Hz</span></div>
+          <input type="range" id="pitchSlider" min="-30" max="30" value="0" step="1">
+        </div>
+        <div class="slider-row" style="margin-bottom:4px;">
+          <div class="valline"><span>Tone</span><span id="volumeVal">+0% · neutral</span></div>
+          <input type="range" id="volumeSlider" min="-40" max="40" value="0" step="1">
+        </div>
+        <button class="small ghost" id="resetDefaultsBtn" style="width:100%;">Reset to factory defaults</button>
+        <p class="hint" style="margin-top:8px;">
+          Tone slides between <strong>subdued</strong> (quieter, a touch lower — like
+          Hushed) and <strong>emphatic</strong> (louder, a touch brighter — like
+          Emphatic) — it's the same combination those presets use, as a continuous
+          dial. Volume alone barely registers on most voices, so Tone nudges pitch
+          along with it to keep the effect audible.<br><br>
+          All three sliders apply immediately to every passage you haven't manually
+          customized — so if the whole chapter reads too fast, slow it down here
+          rather than passage by passage. New chapters start at these settings too.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>Voices on your computer <span style="font-weight:400; text-transform:none; letter-spacing:0;">— ground truth</span></h3>
+        <div class="voice-list" id="installedVoicesList"></div>
+        <p class="hint" style="margin-top:8px;">
+          Read directly from your browser — no guessing, no matching. Whatever plays
+          here is exactly that voice, guaranteed, because it's not standing in for
+          anything else. These aren't tied to your chapter's exported script — they're
+          purely for finding out what's actually installed on this machine.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>Cloud voices <span style="font-weight:400; text-transform:none; letter-spacing:0;">— for the final MP3</span></h3>
+        <div class="voice-list" id="defaultVoiceList"></div>
+        <p class="hint" style="margin-top:8px;">
+          These 18 names are Microsoft's free cloud voices — what your exported
+          script actually uses to render the real MP3 in the Python step. Auditioning
+          here plays an <em>approximation</em>, built by guessing which of your
+          installed voices (above) sounds closest — it is not the real cloud voice
+          itself, since a browser page can't reach that service directly. If a name
+          above matches one in the "Voices on your computer" list exactly (like
+          Jenny, Aria, or Guy on Windows 11), the approximation becomes the real
+          thing; otherwise treat it as a rough guide only.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>Preview</h3>
+        <div id="chapterVoiceStatus" style="margin-bottom:8px;"></div>
+        <div style="display:flex; gap:8px;">
+          <button id="playAllBtn" class="small" style="flex:1;">▶ Play chapter</button>
+          <button id="stopBtn" class="small ghost" style="flex:1;">■ Stop</button>
+        </div>
+        <p class="hint" style="margin-top:10px;">
+          This stands in for the real neural voices using whatever your system has
+          installed — accuracy and reliability both depend on your OS and browser.
+          The exported script always carries the exact edge-tts voice name
+          regardless, so the Python step sounds right either way.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>Record chapter <span style="font-weight:400; text-transform:none; letter-spacing:0;">— real MP3, no API key</span></h3>
+        <button class="primary" id="recordBtn" style="width:100%;" disabled>⏺ Record chapter as MP3</button>
+        <p class="hint" style="margin-top:8px;">
+          Records whatever's actually playing (the free preview voices above,
+          or real generated audio if that's turned on) as it reads the whole
+          chapter, then saves it as a real MP3 — no API key, no Python.
+          Chrome only. Clicking this opens Chrome's own "Share Tab" picker —
+          choose <strong>This Tab</strong> and make sure <strong>Share tab
+          audio</strong> is checked, then click Share. Recording takes as
+          long as the chapter takes to read out loud (a few minutes is
+          normal) — keep this tab open and don't mute it while it runs.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="credit">text readifier · exports a script.json for generate_audiobook.py</footer>
+</div>
+
+<div class="float-toolbar" id="floatToolbar"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Voice roster — real edge-tts neural voice short names. Run
+// `python generate_audiobook.py --list-voices` for the full, always-current list.
+// ---------------------------------------------------------------------------
+// Verified against Microsoft's current edge-tts voice list (name, gender, locale).
+// Run `python generate_audiobook.py --list-voices` any time for the full, live list —
+// this is a curated subset focused on US/UK (plus a few nearby English variants).
+const VOICE_PALETTE = ["#c98a8a", "#8fa585", "#7d93b8", "#c9a24b", "#a487b3", "#6fb0a8", "#b8735a", "#7bbf9e", "#9a8fc9", "#d9a441", "#6b8299", "#a6616f"];
+// Verified against Microsoft's official edge-tts voice metadata (Gender, Locale,
+// VoiceTag ContentCategories/VoicePersonalities). Descriptions below quote or
+// closely paraphrase Microsoft's own published personality tags — not my
+// invented characterizations. The 4 "Multilingual" voices are newer additions
+// with no published personality tag yet; only their gender (by naming
+// convention, consistent with every other voice here) is confirmed, so
+// they're labeled plainly as "multilingual" rather than guessed at.
+// Run `python generate_audiobook.py --list-voices` for the full, always-current list.
+const RAW_VOICES = [
+  { id: "en-US-AriaNeural",             name: "Aria",        desc: "US · confident, positive" },
+  { id: "en-US-JennyNeural",            name: "Jenny",        desc: "US · friendly, comforting" },
+  { id: "en-US-GuyNeural",              name: "Guy",          desc: "US · passionate, energetic" },
+  { id: "en-US-EricNeural",             name: "Eric",         desc: "US · rational, measured" },
+  { id: "en-US-ChristopherNeural",      name: "Christopher",  desc: "US · reliable, authoritative" },
+  { id: "en-US-MichelleNeural",         name: "Michelle",     desc: "US · friendly, pleasant" },
+  { id: "en-US-RogerNeural",            name: "Roger",        desc: "US · lively" },
+  { id: "en-US-SteffanNeural",          name: "Steffan",      desc: "US · rational, measured" },
+  { id: "en-US-AnaNeural",              name: "Ana",          desc: "US · cute, cartoon-style" },
+  { id: "en-US-AndrewMultilingualNeural", name: "Andrew",     desc: "US · multilingual (male)" },
+  { id: "en-US-AvaMultilingualNeural",   name: "Ava",          desc: "US · multilingual (female)" },
+  { id: "en-US-EmmaMultilingualNeural",  name: "Emma",         desc: "US · multilingual (female)" },
+  { id: "en-US-BrianMultilingualNeural", name: "Brian",        desc: "US · multilingual (male)" },
+  { id: "en-GB-SoniaNeural",            name: "Sonia",        desc: "UK · friendly, positive" },
+  { id: "en-GB-RyanNeural",             name: "Ryan",         desc: "UK · friendly, positive" },
+  { id: "en-GB-LibbyNeural",            name: "Libby",        desc: "UK · friendly, positive" },
+  { id: "en-GB-ThomasNeural",           name: "Thomas",       desc: "UK · friendly, positive" },
+  { id: "en-GB-MaisieNeural",           name: "Maisie",       desc: "UK · friendly, positive" },
+];
+const VOICES = RAW_VOICES.map((v, i) => ({
+  ...v,
+  color: VOICE_PALETTE[i % VOICE_PALETTE.length],
+  lang: v.id.split("-").slice(0, 2).join("-"),
+  gender: /Jenny|Michelle|Ana|Ava|Emma|Sonia|Libby|Maisie|Aria/.test(v.id) ? "female" : "male",
+}));
+
+// Presets are fixed, absolute delivery choices — independent of the narration
+// defaults below, since "Hushed" should mean the same thing regardless of
+// what the base reading speed is set to.
+const PRESETS = {
+  emphatic: { rate: 8,   pitch: 15,  volume: 10,  label: "Emphatic" },
+  hushed:   { rate: -14, pitch: -14, volume: -20, label: "Hushed" },
+  dramatic: { rate: -20, pitch: -6,  volume: 0,   label: "Slow / dramatic" },
+  urgent:   { rate: 20,  pitch: 6,   volume: 5,   label: "Urgent / fast" },
+};
+
+const PARAGRAPH_PAUSE_MS = 550;
+
+// Narration defaults — adjustable via the Defaults panel. Any passage that
+// hasn't had a custom delivery applied tracks these live.
+let defaultVoice = "en-US-JennyNeural";
+let defaultRate = -8;    // slightly slower than "neutral" — most people find rate 0 a bit fast
+let defaultPitch = 0;
+let defaultTone = 0;     // -40 (subdued) .. +40 (emphatic) — see effectiveTone() below
+
+// The Tone slider needs an audible effect on its own, and volume alone often
+// isn't perceptible (many system voices barely honor it). So "Tone" nudges
+// pitch a little in the same direction as the volume change: louder+brighter
+// toward "emphatic", quieter+lower toward "subdued" — the same combination
+// the Emphatic/Hushed presets use, just as a continuous dial instead of two
+// fixed buttons.
+function effectiveTone(tone) {
+  return { volume: tone, pitchNudge: Math.round(tone * 0.35) };
+}
+function effectivePitch() { return defaultPitch + effectiveTone(defaultTone).pitchNudge; }
+function effectiveVolume() { return effectiveTone(defaultTone).volume; }
+
+// segments: [{id, type:'speech', text, voice, rate, pitch, volume, customDelivery} | {id, type:'pause', ms}]
+let segments = [];
+let seqId = 1;
+const newId = () => "s" + (seqId++);
+
+// ---------------------------------------------------------------------------
+// Parsing plain text into the segment model
+// ---------------------------------------------------------------------------
+function parseTextToSegments(raw) {
+  const paragraphs = raw.split(/\n\s*\n/).map(p => p.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const segs = [];
+  paragraphs.forEach((p, i) => {
+    segs.push({
+      id: newId(), type: "speech", text: p, voice: defaultVoice,
+      rate: defaultRate, pitch: effectivePitch(), volume: effectiveVolume(),
+      customDelivery: false,
+    });
+    if (i < paragraphs.length - 1) {
+      segs.push({ id: newId(), type: "pause", ms: PARAGRAPH_PAUSE_MS });
+    }
+  });
+  return segs;
+}
+
+
+// ---------------------------------------------------------------------------
+// Rendering the manuscript
+// ---------------------------------------------------------------------------
+const manuscriptEl = document.getElementById("manuscript");
+
+function voiceColor(voiceId) {
+  const v = VOICES.find(v => v.id === voiceId);
+  return v ? v.color : "#888888";
+}
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function renderManuscript() {
+  if (segments.length === 0) {
+    manuscriptEl.innerHTML = `<div class="empty-state"><span class="big">A blank page.</span>Load a .txt chapter to begin casting voices, or just drag one in here.<br>Select any passage afterward to assign a voice and delivery.</div>`;
+    renderTimeline();
+    renderLegend();
+    return;
+  }
+  let html = "";
+  segments.forEach(seg => {
+    if (seg.type === "pause") {
+      html += `<span class="pause-chip" data-id="${seg.id}" title="Click to edit pause">⏸ ${seg.ms}ms <span class="del" data-del-pause="${seg.id}">✕</span></span>`;
+    } else {
+      const color = voiceColor(seg.voice);
+      const vName = VOICES.find(v => v.id === seg.voice)?.name || seg.voice;
+      const bg = hexToRgba(color, 0.30);
+      const modified = seg.customDelivery;
+      const underline = modified ? `border-bottom:3px dashed ${hexToRgba(color, 0.95)};` : "";
+      const tooltip = modified
+        ? `${vName} · custom delivery — rate ${seg.rate >= 0 ? "+" : ""}${seg.rate}%, pitch ${seg.pitch >= 0 ? "+" : ""}${seg.pitch}Hz, volume ${seg.volume >= 0 ? "+" : ""}${seg.volume}%`
+        : `${vName} · default delivery`;
+      html += `<span class="seg" data-id="${seg.id}" data-voice="${seg.voice}" style="background:${bg};${underline}" title="${escapeAttr(tooltip)}">${escapeHtml(seg.text)}</span> `;
+    }
+  });
+  manuscriptEl.innerHTML = html;
+  renderTimeline();
+  renderLegend();
+}
+
+function renderLegend() {
+  const el = document.getElementById("legend");
+  if (!el) return;
+  const used = new Map();
+  segments.forEach(s => {
+    if (s.type === "speech") {
+      if (!used.has(s.voice)) used.set(s.voice, { count: 0, custom: 0 });
+      const rec = used.get(s.voice);
+      rec.count++;
+      if (s.customDelivery) rec.custom++;
+    }
+  });
+  if (used.size === 0) { el.innerHTML = ""; return; }
+  let html = "";
+  used.forEach((rec, voiceId) => {
+    const v = VOICES.find(v => v.id === voiceId);
+    if (!v) return;
+    html += `<span class="legend-item"><span class="swatch" style="background:${v.color}"></span>${v.name}${rec.custom ? ` <span class="legend-custom">(${rec.custom} custom)</span>` : ""}</span>`;
+  });
+  html += `<span class="legend-item legend-note">┈ dashed underline = custom delivery</span>`;
+  el.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ---------------------------------------------------------------------------
+// Default narrator picker
+// ---------------------------------------------------------------------------
+function renderDefaultVoiceList() {
+  try { stopActivePlayback(); } catch (e) {} // rebuilding these buttons would otherwise orphan any in-progress playback
+  const list = document.getElementById("defaultVoiceList");
+  list.innerHTML = "";
+  VOICES.forEach(v => {
+    const row = document.createElement("div");
+    row.className = "voice-item" + (v.id === defaultVoice ? " selected" : "");
+
+    const info = document.createElement("div");
+    info.className = "vi-info";
+    info.innerHTML = `<span class="swatch" style="background:${v.color}"></span><span class="vname">${v.name}</span><span class="vdesc">${v.desc}</span>`;
+    info.onclick = () => {
+      defaultVoice = v.id;
+      renderDefaultVoiceList();
+    };
+
+    row.appendChild(info);
+
+    const playBtn = document.createElement("button");
+    playBtn.className = "tv-play";
+    playBtn.textContent = "▶";
+    playBtn.title = `Audition ${v.name}`;
+    playBtn.onclick = (e) => { e.stopPropagation(); auditionVoice(v.id, undefined, playBtn); };
+
+    row.appendChild(playBtn);
+    list.appendChild(row);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Category 1: voices actually installed on this machine — read directly from
+// the browser's own voice list, no matching/guessing involved. Whatever
+// plays here is exactly what it says, guaranteed, because there's no
+// approximation step between the name and the sound.
+// ---------------------------------------------------------------------------
+function auditionRealVoice(voiceObj, btn) {
+  if (!window.speechSynthesis) { alert("Voice preview isn't supported in this browser."); return; }
+  const wasThisPlaying = !!(btn && activePlayButton === btn);
+  stopActivePlayback();
+  if (wasThisPlaying) return;
+
+  const text = getAuditionText(pendingSelectionText);
+  const style = getAuditionStyle();
+  const myToken = ++playToken;
+  if (btn) { setPlayBtnStarting(btn); activePlayButton = btn; }
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.voice = voiceObj; // direct assignment - no mapping, no heuristic, no guessing
+  utter.rate = clampRateVal(style.rate);
+  utter.pitch = clampPitchVal(style.pitch);
+  utter.volume = clampVolumeVal(style.volume);
+
+  let didStart = false;
+  const finish = (failed) => {
+    if (myToken !== playToken) return;
+    clearTimeout(safetyTimer);
+    clearTimeout(startTimeout);
+    stopSpeechKeepAlive();
+    if (activePlayButton === btn) { resetPlayBtnUI(btn); activePlayButton = null; }
+    if (failed && !didStart) {
+      alert(`"${voiceObj.name}" failed to play in this browser. Try a different voice, or check the console (F12) for details.`);
+    }
+  };
+  // Two separate timeouts doing two different jobs: this one catches "never
+  // even started" quickly (a few seconds is plenty to know that's happened),
+  // so a long passage doesn't leave you staring at a stuck button for
+  // minutes before anything tells you it failed.
+  const startTimeout = setTimeout(() => { if (!didStart) finish(true); }, 8000);
+  // This one is the separate, longer net for "started but never finished."
+  const safetyTimer = setTimeout(() => finish(true), estimateSpeechMs(text, style.rate) + 6000);
+  utter.onstart = () => { didStart = true; clearTimeout(startTimeout); startSpeechKeepAlive(); if (btn && activePlayButton === btn) setPlayBtnUI(btn); };
+  utter.onend = () => finish(false);
+  utter.onerror = () => finish(true);
+  setTimeout(() => { if (myToken === playToken) { window.speechSynthesis.resume(); window.speechSynthesis.speak(utter); } }, 60);
+}
+
+function updateChapterVoiceStatus() {
+  const el = document.getElementById("chapterVoiceStatus");
+  if (!el) return;
+  if (forcedChapterVoice) {
+    el.innerHTML = `<span class="hint">Using <strong>${escapeHtml(forcedChapterVoice.name)}</strong> for the whole chapter</span> <button class="small ghost" id="clearForcedVoiceBtn" style="padding:2px 8px; font-size:11px;">Clear</button>`;
+    const clearBtn = document.getElementById("clearForcedVoiceBtn");
+    if (clearBtn) clearBtn.onclick = () => {
+      forcedChapterVoice = null;
+      renderInstalledVoicesList();
+      updateChapterVoiceStatus();
+    };
+  } else {
+    el.innerHTML = `<span class="hint">Using each passage's assigned cloud voice (default) — pick a voice above to override with one voice for the whole chapter.</span>`;
+  }
+}
+
+function renderInstalledVoicesList() {
+  const container = document.getElementById("installedVoicesList");
+  if (!container) return;
+  // Deliberately NOT calling stopActivePlayback() here. This list can be
+  // rebuilt at any time - the browser's voiceschanged event can fire more
+  // than once during a session, and this function is hooked into that. If
+  // it stopped playback on every rebuild, an unrelated voice-list refresh
+  // could silently kill a chapter read in progress. The small tradeoff:
+  // if a button in THIS specific list is banned mid-audition when it
+  // rebuilds, it could orphan that one playback - low-risk since this
+  // list's content rarely changes after the initial page load.
+  container.innerHTML = "";
+
+  if (!availableVoices.length) {
+    container.innerHTML = '<p class="hint" style="padding:4px 0;">No voices detected yet - if you just installed some, try reloading this page.</p>';
+    return;
+  }
+
+  const englishFirst = availableVoices.filter(v => v.lang.toLowerCase().startsWith("en"));
+  const others = availableVoices.filter(v => !v.lang.toLowerCase().startsWith("en"));
+  [...englishFirst, ...others].forEach(v => {
+    const row = document.createElement("div");
+    row.className = "voice-item" + (forcedChapterVoice === v ? " selected" : "");
+
+    const info = document.createElement("div");
+    info.className = "vi-info";
+    info.title = "Click to use this voice for the whole chapter";
+    info.innerHTML = `<span class="vname">${escapeHtml(v.name)}</span><span class="vdesc">${escapeHtml(v.lang)}</span>`;
+    info.onclick = () => {
+      forcedChapterVoice = forcedChapterVoice === v ? null : v; // click again to clear
+      renderInstalledVoicesList();
+      updateChapterVoiceStatus();
+    };
+
+    const playBtn = document.createElement("button");
+    playBtn.className = "tv-play";
+    playBtn.textContent = "▶";
+    playBtn.title = `Audition ${v.name}`;
+    playBtn.onclick = (e) => { e.stopPropagation(); auditionRealVoice(v, playBtn); };
+
+    row.appendChild(info);
+    row.appendChild(playBtn);
+    container.appendChild(row);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Timeline (signature element)
+// ---------------------------------------------------------------------------
+function estimateMs(seg) {
+  if (seg.type === "pause") return seg.ms;
+  // ~150 words/min baseline reading speed, adjusted by rate%
+  const words = seg.text.split(/\s+/).length;
+  const wpm = 155 * (1 + (seg.rate || 0) / 100);
+  return (words / Math.max(wpm, 40)) * 60000;
+}
+
+function renderTimeline() {
+  const track = document.getElementById("timelineTrack");
+  const meta = document.getElementById("timelineMeta");
+  // keep playhead element, rebuild blocks
+  track.querySelectorAll(".tblock").forEach(el => el.remove());
+  const total = segments.reduce((sum, s) => sum + estimateMs(s), 0) || 1;
+  const speechCount = segments.filter(s => s.type === "speech").length;
+  meta.textContent = `${speechCount} passage${speechCount === 1 ? "" : "s"} · ~${formatMinSec(total)} est.`;
+
+  segments.forEach(seg => {
+    const dur = estimateMs(seg);
+    const block = document.createElement("div");
+    block.className = "tblock" + (seg.type === "pause" ? " pause" : "");
+    block.style.width = ((dur / total) * 100) + "%";
+    block.dataset.id = seg.id;
+    if (seg.type === "speech") block.style.background = voiceColor(seg.voice);
+    block.title = seg.type === "pause" ? `Pause · ${seg.ms}ms` : `${VOICES.find(v=>v.id===seg.voice)?.name || seg.voice}: "${seg.text.slice(0,40)}..."`;
+    block.onclick = () => {
+      const target = manuscriptEl.querySelector(`[data-id="${seg.id}"]`);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.style.transition = "none";
+        target.style.boxShadow = "0 0 0 3px var(--brass-bright)";
+        setTimeout(() => { target.style.boxShadow = ""; }, 700);
+      }
+    };
+    track.appendChild(block);
+  });
+}
+
+function formatMinSec(ms) {
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// ---------------------------------------------------------------------------
+// Selection handling → floating toolbar → split segments
+// ---------------------------------------------------------------------------
+const toolbar = document.getElementById("floatToolbar");
+let pendingSelection = null; // {startId, startOffset, endId, endOffset}
+let pendingSelectionText = "";
+
+document.addEventListener("mouseup", (e) => {
+  if (toolbar.contains(e.target)) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+    closeToolbar();
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  if (!manuscriptEl.contains(range.commonAncestorContainer)) {
+    closeToolbar();
+    return;
+  }
+
+  const startSpan = closestSeg(range.startContainer);
+  const endSpan = closestSeg(range.endContainer);
+  if (!startSpan || !endSpan) { closeToolbar(); return; }
+
+  pendingSelection = {
+    startId: startSpan.dataset.id,
+    startOffset: range.startOffset,
+    endId: endSpan.dataset.id,
+    endOffset: range.endOffset,
+  };
+  pendingSelectionText = range.toString();
+
+  showToolbar(range);
+});
+
+function closestSeg(node) {
+  let el = node.nodeType === 3 ? node.parentElement : node;
+  while (el && !(el.classList && el.classList.contains("seg"))) el = el.parentElement;
+  return el;
+}
+
+function showToolbar(range) {
+  const rect = range.getBoundingClientRect();
+  toolbar.innerHTML = "";
+
+  const headerRow = document.createElement("div");
+  headerRow.className = "row";
+  headerRow.style.justifyContent = "flex-end";
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "small ghost";
+  closeBtn.textContent = "✕";
+  closeBtn.style.padding = "3px 8px";
+  closeBtn.onclick = () => closeToolbar();
+  headerRow.appendChild(closeBtn);
+  toolbar.appendChild(headerRow);
+
+  const row1 = document.createElement("div");
+  row1.className = "row toolbar-voice-list";
+  VOICES.forEach(v => {
+    const item = document.createElement("div");
+    item.className = "toolbar-voice-item";
+
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background = v.color;
+
+    const label = document.createElement("span");
+    label.className = "tv-name";
+    label.textContent = v.name;
+
+    const assignArea = document.createElement("div");
+    assignArea.className = "tv-assign";
+    assignArea.appendChild(swatch);
+    assignArea.appendChild(label);
+    assignArea.title = `Assign ${v.name} to this passage`;
+    assignArea.onclick = () => applyToSelection({ voice: v.id });
+
+    const playBtn = document.createElement("button");
+    playBtn.className = "tv-play";
+    playBtn.textContent = "▶";
+    playBtn.title = `Audition ${v.name}`;
+    playBtn.onclick = (e) => { e.stopPropagation(); auditionVoice(v.id, pendingSelectionText, playBtn); };
+
+    item.appendChild(assignArea);
+    item.appendChild(playBtn);
+    row1.appendChild(item);
+  });
+  toolbar.appendChild(row1);
+
+  const row2 = document.createElement("div");
+  row2.className = "row";
+  Object.entries(PRESETS).forEach(([key, p]) => {
+    const b = document.createElement("button");
+    b.className = "small ghost";
+    b.textContent = p.label;
+    b.style.fontSize = "11px";
+    b.onclick = () => applyToSelection({ rate: p.rate, pitch: p.pitch, volume: p.volume, customDelivery: true });
+    row2.appendChild(b);
+  });
+  const resetBtn = document.createElement("button");
+  resetBtn.className = "small ghost";
+  resetBtn.textContent = "↺ Reset to default";
+  resetBtn.style.fontSize = "11px";
+  resetBtn.onclick = () => applyToSelection({ rate: defaultRate, pitch: effectivePitch(), volume: effectiveVolume(), customDelivery: false });
+  row2.appendChild(resetBtn);
+  toolbar.appendChild(row2);
+
+  const row3 = document.createElement("div");
+  row3.className = "row";
+  const pauseBtn = document.createElement("button");
+  pauseBtn.className = "small ghost";
+  pauseBtn.textContent = "⏸ Insert pause here";
+  pauseBtn.style.fontSize = "11px";
+  pauseBtn.onclick = () => insertPauseAtSelection();
+  row3.appendChild(pauseBtn);
+  toolbar.appendChild(row3);
+
+  const row4 = document.createElement("div");
+  row4.className = "row";
+  const playAssignedBtn = document.createElement("button");
+  playAssignedBtn.className = "small";
+  playAssignedBtn.textContent = "▶ Play this selection (as assigned)";
+  playAssignedBtn.style.fontSize = "11px";
+  playAssignedBtn.onclick = () => playSelectionAsAssigned(playAssignedBtn);
+  row4.appendChild(playAssignedBtn);
+  toolbar.appendChild(row4);
+
+  toolbar.style.display = "flex";
+  toolbar.style.flexDirection = "column";
+  const top = rect.top + window.scrollY - toolbar.offsetHeight - 10;
+  const left = Math.max(10, rect.left + window.scrollX - 20);
+  toolbar.style.top = Math.max(10, top) + "px";
+  toolbar.style.left = left + "px";
+}
+
+function findIndex(id) { return segments.findIndex(s => s.id === id); }
+
+function applyToSelection(changes) {
+  if (!pendingSelection) return;
+  const { startId, startOffset, endId, endOffset } = pendingSelection;
+  const i0 = findIndex(startId);
+  const i1 = findIndex(endId);
+  if (i0 === -1 || i1 === -1) return;
+
+  let newStartId, newEndId, newStartOffset, newEndOffset;
+
+  if (i0 === i1) {
+    const seg = segments[i0];
+    const before = seg.text.slice(0, startOffset);
+    const mid = seg.text.slice(startOffset, endOffset) || seg.text;
+    const after = seg.text.slice(endOffset);
+    const replacement = [];
+    if (before) replacement.push({ ...seg, id: newId(), text: before });
+    const midSeg = { ...seg, ...changes, id: newId(), text: mid };
+    replacement.push(midSeg);
+    if (after) replacement.push({ ...seg, id: newId(), text: after });
+    segments.splice(i0, 1, ...replacement);
+    newStartId = newEndId = midSeg.id;
+    newStartOffset = 0;
+    newEndOffset = midSeg.text.length;
+  } else {
+    const segA = segments[i0];
+    const segB = segments[i1];
+    const beforeText = segA.text.slice(0, startOffset);
+    const insideAText = segA.text.slice(startOffset) || segA.text;
+    const insideBText = segB.text.slice(0, endOffset) || segB.text;
+    const afterText = segB.text.slice(endOffset);
+
+    const newTail = [];
+    if (afterText) newTail.push({ ...segB, id: newId(), text: afterText });
+    const insideBSeg = { ...segB, ...changes, id: newId(), text: insideBText };
+
+    // mutate any speech segments strictly between i0 and i1 in place
+    for (let k = i0 + 1; k < i1; k++) {
+      if (segments[k].type === "speech") Object.assign(segments[k], changes);
+    }
+    const middleRun = segments.slice(i0 + 1, i1); // already mutated in place above
+
+    const newHead = [];
+    if (beforeText) newHead.push({ ...segA, id: newId(), text: beforeText });
+    const insideASeg = { ...segA, ...changes, id: newId(), text: insideAText };
+    newHead.push(insideASeg);
+
+    segments.splice(i0, i1 - i0 + 1, ...newHead, ...middleRun, insideBSeg, ...newTail);
+
+    newStartId = insideASeg.id; newStartOffset = 0;
+    newEndId = insideBSeg.id; newEndOffset = insideBSeg.text.length;
+  }
+
+  // Keep the toolbar open and re-target the same (now-modified) passage, so you
+  // can immediately preview it or try another preset without re-selecting.
+  pendingSelection = { startId: newStartId, startOffset: newStartOffset, endId: newEndId, endOffset: newEndOffset };
+  renderManuscript();
+  refreshExportState();
+}
+
+function insertPauseAtSelection() {
+  if (!pendingSelection) return;
+  const i0 = findIndex(pendingSelection.startId);
+  if (i0 === -1) return;
+  segments.splice(i0, 0, { id: newId(), type: "pause", ms: 500 });
+  renderManuscript();
+  refreshExportState();
+}
+
+function closeToolbar() {
+  stopActivePlayback();
+  toolbar.style.display = "none";
+  window.getSelection().removeAllRanges();
+  pendingSelection = null;
+}
+
+function playSelectionAsAssigned(btn) {
+  if (!pendingSelection) return;
+  const i0 = findIndex(pendingSelection.startId);
+  const i1 = findIndex(pendingSelection.endId);
+  if (i0 === -1 || i1 === -1) return;
+  const lo = Math.min(i0, i1), hi = Math.max(i0, i1);
+  playQueueSegments(segments.slice(lo, hi + 1), btn);
+}
+
+// click on pause chip: edit ms or delete
+manuscriptEl.addEventListener("click", (e) => {
+  const del = e.target.closest("[data-del-pause]");
+  if (del) {
+    const id = del.dataset.delPause;
+    segments = segments.filter(s => s.id !== id);
+    renderManuscript();
+    refreshExportState();
+    return;
+  }
+  const chip = e.target.closest(".pause-chip");
+  if (chip) {
+    const id = chip.dataset.id;
+    const seg = segments.find(s => s.id === id);
+    const val = prompt("Pause length in milliseconds:", seg.ms);
+    if (val !== null && !isNaN(parseInt(val, 10))) {
+      seg.ms = Math.max(0, parseInt(val, 10));
+      renderManuscript();
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// File loading (file picker + drag-and-drop)
+// ---------------------------------------------------------------------------
+function loadChapterFile(file) {
+  if (!file) return;
+  if (!/\.txt$/i.test(file.name)) {
+    alert("Please use a .txt file.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    segments = parseTextToSegments(reader.result);
+    if (!document.getElementById("chapterTitle").value) {
+      document.getElementById("chapterTitle").value = file.name.replace(/\.txt$/i, "");
+    }
+    renderManuscript();
+    refreshExportState();
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById("loadBtn").onclick = () => document.getElementById("fileInput").click();
+document.getElementById("fileInput").addEventListener("change", (e) => {
+  loadChapterFile(e.target.files[0]);
+  e.target.value = ""; // allow re-selecting the same file later
+});
+
+const pageCard = document.getElementById("pageCard");
+["dragenter", "dragover"].forEach(evt => {
+  pageCard.addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    pageCard.classList.add("drag-over");
+  });
+});
+["dragleave", "dragend"].forEach(evt => {
+  pageCard.addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (evt === "dragleave" && pageCard.contains(e.relatedTarget)) return; // still inside
+    pageCard.classList.remove("drag-over");
+  });
+});
+pageCard.addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  pageCard.classList.remove("drag-over");
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  loadChapterFile(file);
+});
+
+function refreshExportState() {
+  document.getElementById("exportBtn").disabled = segments.length === 0;
+  const rb = document.getElementById("recordBtn");
+  if (rb && !rb.dataset.recording) rb.disabled = segments.length === 0;
+}
+
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+document.getElementById("exportBtn").onclick = () => {
+  const title = document.getElementById("chapterTitle").value || "chapter";
+  const out = {
+    chapter_title: title,
+    default_voice: defaultVoice,
+    segments: segments.map(s => s.type === "pause"
+      ? { type: "pause", ms: s.ms }
+      : { type: "speech", text: s.text, voice: s.voice, rate: `${s.rate >= 0 ? "+" : ""}${s.rate}%`, pitch: `${s.pitch >= 0 ? "+" : ""}${s.pitch}Hz`, volume: `${s.volume >= 0 ? "+" : ""}${s.volume}%` }
+    ),
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = title.replace(/[^\w\-]+/g, "_") + "_script.json";
+  a.click();
+};
+
+// ---------------------------------------------------------------------------
+// Unified play/stop toggle state. Browser speech-synthesis events (onend/
+// onerror) are notoriously unreliable — they can fire early, late, twice, or
+// not at all, especially right after a cancel(). Rather than trust them as
+// the sole source of truth, every play action gets a token; stale callbacks
+// from a superseded utterance check their token and become no-ops, and a
+// safety timeout forces cleanup even if the browser never fires an event at
+// all. Stopping always does a DOM-wide reset of any "is-playing" button, so
+// the UI can never get stuck even if our own bookkeeping falls out of sync.
+// ---------------------------------------------------------------------------
+let activePlayButton = null;
+let forcedChapterVoice = null; // when set, overrides per-passage voice mapping entirely for Play Chapter
+let playToken = 0;
+
+function setPlayBtnUI(btn) {
+  if (!btn) return;
+  if (btn.dataset.origLabel === undefined) btn.dataset.origLabel = btn.textContent;
+  btn.textContent = btn.classList.contains("tv-play") ? "■" : "■ Stop";
+  btn.classList.add("is-playing");
+  btn.classList.remove("is-starting");
+}
+function setPlayBtnStarting(btn) {
+  if (!btn) return;
+  if (btn.dataset.origLabel === undefined) btn.dataset.origLabel = btn.textContent;
+  btn.textContent = btn.classList.contains("tv-play") ? "⏳" : "⏳ Starting…";
+  btn.classList.add("is-playing", "is-starting");
+}
+function resetPlayBtnUI(btn) {
+  if (!btn) return;
+  if (btn.dataset.origLabel !== undefined) btn.textContent = btn.dataset.origLabel;
+  btn.classList.remove("is-playing", "is-starting");
+}
+function resetAllPlayButtonsUI() {
+  document.querySelectorAll(".is-playing").forEach(resetPlayBtnUI);
+}
+// Chrome (and some other browsers) have a long-documented bug where
+// speechSynthesis.cancel() sometimes doesn't actually silence what's
+// currently being spoken — it clears the queue but the in-progress utterance
+// keeps playing. There's no way to force this from JS with 100% reliability,
+// but pause-then-cancel, plus a follow-up cancel shortly after, is the
+// standard mitigation and meaningfully improves consistency.
+function hardStopSpeech() {
+  if (!window.speechSynthesis) return;
+  // NOTE: deliberately NOT calling .pause() here - it locks the speech
+  // queue in a paused state with no automatic unpause, and since this runs
+  // on every render (including at page load, before anything's even been
+  // clicked), it was silently blocking every future speak() call. cancel()
+  // alone is sufficient to stop what's currently speaking.
+  //
+  // The two delayed follow-up cancels below are defensive insurance for a
+  // separate Chrome quirk where a single cancel() doesn't fully stop
+  // currently-speaking audio. But every new play action calls this function
+  // FIRST, then immediately starts new speech afterward — so a delayed
+  // cancel left over from THIS stop could fire 150ms later and kill audio
+  // that a subsequent action already started. Guard against that: only
+  // fire the delayed cancels if nothing new has started in the meantime
+  // (playToken is still what it was right after this stop incremented it).
+  const tokenAtStop = playToken;
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  setTimeout(() => { if (playToken === tokenAtStop) { try { window.speechSynthesis.cancel(); } catch (e) {} } }, 30);
+  setTimeout(() => { if (playToken === tokenAtStop) { try { window.speechSynthesis.cancel(); } catch (e) {} } }, 150);
+}
+
+// ---------------------------------------------------------------------------
+// Shared Web Audio context - used by the recording feature to decode and
+// re-encode captured audio.
+// ---------------------------------------------------------------------------
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// Chrome has a long-documented bug where speechSynthesis silently stops
+// speaking partway through longer text (often around 15 seconds in) unless
+// something periodically nudges it. The standard workaround is a repeated
+// pause()/resume() cycle while speech is active.
+let keepAliveInterval = null;
+function startSpeechKeepAlive() {
+  stopSpeechKeepAlive();
+  keepAliveInterval = setInterval(() => {
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      try { window.speechSynthesis.pause(); window.speechSynthesis.resume(); } catch (e) {}
+    }
+  }, 10000);
+}
+function stopSpeechKeepAlive() {
+  if (keepAliveInterval) { clearInterval(keepAliveInterval); keepAliveInterval = null; }
+}
+
+function stopActivePlayback() {
+  playToken++; // invalidates any in-flight callbacks/timeouts from here on
+  isPlaying = false;
+  queueCompletionCallback = null; // a manual stop is not "natural completion" - don't fire it later
+  stopSpeechKeepAlive();
+  hardStopSpeech();
+  const ph = document.getElementById("playhead");
+  if (ph) ph.style.display = "none";
+  document.querySelectorAll(".tblock.playing").forEach(b => b.classList.remove("playing"));
+  resetAllPlayButtonsUI();
+  activePlayButton = null;
+}
+
+function clampRateVal(r)   { return Math.min(2, Math.max(0.5, 1 + (r || 0) / 100)); }
+function clampPitchVal(p)  { return Math.min(2, Math.max(0, 1 + (p || 0) / 50)); }
+function clampVolumeVal(v) { return Math.min(1, Math.max(0, 1 + (v || 0) / 100)); }
+function estimateSpeechMs(text, ratePercent) {
+  // This is a last-resort safety net for the rare case a browser never fires
+  // its "finished speaking" event at all — not a precise duration prediction.
+  // Real voices vary a lot in speed, and many are slower than a "brisk
+  // reading" baseline, so this deliberately overestimates generously: better
+  // to wait a bit longer than to reset the button while audio is still
+  // genuinely playing.
+  const words = (text || "").split(/\s+/).filter(Boolean).length;
+  const wpm = 100 * (1 + (ratePercent || 0) / 100); // conservative (slow) baseline
+  const estimatedMs = (words / Math.max(wpm, 30)) * 60000;
+  return estimatedMs * 1.6; // generous margin on top of the conservative baseline
+}
+
+// ---------------------------------------------------------------------------
+// Preview playback (approximate — browser voices, for rehearsal only)
+// ---------------------------------------------------------------------------
+let availableVoices = [];
+let voiceAssignmentMap = {}; // edge voice id -> SpeechSynthesisVoice
+let assignmentsReady = false;
+
+function loadBrowserVoices() {
+  availableVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  if (availableVoices.length) computeVoiceAssignments();
+  if (typeof renderInstalledVoicesList === "function") renderInstalledVoicesList();
+}
+if (window.speechSynthesis) {
+  loadBrowserVoices();
+  window.speechSynthesis.onvoiceschanged = loadBrowserVoices;
+  // Some browsers (esp. Safari) never fire onvoiceschanged reliably — poll briefly as a fallback.
+  let tries = 0;
+  const poll = setInterval(() => {
+    tries++;
+    if (availableVoices.length || tries > 20) { clearInterval(poll); return; }
+    loadBrowserVoices();
+  }, 250);
+}
+
+// Assign each curated voice to a distinct installed browser voice where possible,
+// preferring an exact locale + gender match, falling back gracefully, and never
+// reusing a browser voice while unused ones remain.
+function computeVoiceAssignments() {
+  voiceAssignmentMap = {};
+  if (!availableVoices.length) return;
+  const used = new Set();
+  const femaleRe = /female|zira|jenny|aria|samantha|victoria|karen|susan|moira|tessa|fiona/i;
+  const maleRe = /male|guy|david|daniel|alex|fred|george|mark|thomas/i;
+  // "Google ..." voices (Google US English, Google UK English Female/Male,
+  // etc.) are Chrome's own cloud-based voices — they need to reach Google's
+  // servers to actually produce audio, and local file:// pages are blocked
+  // from doing that. They report as "installed" but silently fail to speak
+  // at all in that context. Prefer genuine on-device voices at every tier,
+  // even if it means reusing one for multiple curated names, and only fall
+  // back to a remote voice if there's truly no local voice available.
+  const isRemoteVoice = (bv) => /google/i.test(bv.name);
+
+  const englishVoices = availableVoices.filter(bv => bv.lang.toLowerCase().startsWith("en"));
+  const englishFamily = englishVoices.length ? englishVoices : availableVoices; // true last resort
+  const localOnly = englishFamily.filter(bv => !isRemoteVoice(bv));
+  const hasAnyLocal = localOnly.length > 0;
+  const pool = hasAnyLocal ? localOnly : englishFamily; // only touch remote voices if no local ones exist at all
+
+  // Assignment priority is separate from display order: Jenny gets first
+  // pick of real voices regardless of her position in the visible list,
+  // since she's the one actually being used/trusted - everyone else can
+  // fall back to whatever's left.
+  const assignmentOrder = [...VOICES].sort((a, b) => {
+    if (a.id === "en-US-JennyNeural") return -1;
+    if (b.id === "en-US-JennyNeural") return 1;
+    return 0;
+  });
+
+  assignmentOrder.forEach(v => {
+    const exactLocale = pool.filter(bv => bv.lang.toLowerCase() === v.lang.toLowerCase());
+    const genderRe = v.gender === "female" ? femaleRe : maleRe;
+
+    const attempts = [
+      () => exactLocale.find(bv => genderRe.test(bv.name) && !used.has(bv.name)),
+      () => pool.find(bv => genderRe.test(bv.name) && !used.has(bv.name)),
+      () => exactLocale.find(bv => !used.has(bv.name)),
+      () => pool.find(bv => !used.has(bv.name)),
+      () => exactLocale.find(bv => genderRe.test(bv.name)),
+      () => pool.find(bv => genderRe.test(bv.name)),
+      () => exactLocale[0],
+      () => pool[0],
+    ];
+
+    let candidate = null;
+    for (const attempt of attempts) {
+      candidate = attempt();
+      if (candidate) break;
+    }
+
+    if (candidate) {
+      used.add(candidate.name);
+      voiceAssignmentMap[v.id] = candidate;
+    }
+  });
+  assignmentsReady = true;
+}
+
+function pickBrowserVoice(edgeVoiceId) {
+  if (!assignmentsReady && availableVoices.length) computeVoiceAssignments();
+  return voiceAssignmentMap[edgeVoiceId] || availableVoices[0] || null;
+}
+
+// ---------------------------------------------------------------------------
+// Voice auditioning — play a short sample in a given voice so you can compare
+// options before assigning one to a passage. Uses the CURRENT rate/pitch/volume
+// context (the highlighted passage's own settings if there is one, otherwise
+// the global narration defaults) so you're judging the voice under the same
+// stylistic alterations it would actually be read with.
+// ---------------------------------------------------------------------------
+const GENERIC_SAMPLE = "The old clockmaker set down his tools and listened to the rain. \"Time,\" he said quietly, \"is the only thing that cannot be repaired.\" Outside, the village had already gone dark.";
+
+const SAMPLE_MIN_WORDS = 10;
+const SAMPLE_MAX_WORDS = 40;
+
+// Builds an audition sample of 10-40 words, preferring to end on a sentence
+// boundary. Only cuts mid-sentence in the two cases where a clean boundary
+// is mathematically impossible within that range (see cases below) — no
+// ellipsis marker on a hard cut, by design.
+function buildAuditionSample(text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return "";
+
+  const totalWords = trimmed.split(/\s+/).filter(Boolean);
+  if (totalWords.length <= SAMPLE_MIN_WORDS) return trimmed; // shorter than the floor - use all of it
+
+  const sentences = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [trimmed];
+  let accumulated = 0;
+  const picked = [];
+
+  for (const sentence of sentences) {
+    const sentenceWords = sentence.trim().split(/\s+/).filter(Boolean);
+    const newTotal = accumulated + sentenceWords.length;
+
+    // Case: a single sentence exceeds the ceiling entirely on its own -
+    // there's no boundary to land on at all. Hard-cut at the ceiling.
+    if (accumulated === 0 && sentenceWords.length > SAMPLE_MAX_WORDS) {
+      return sentenceWords.slice(0, SAMPLE_MAX_WORDS).join(" ");
+    }
+
+    // Normal case: landing inside the range on a sentence boundary - stop here.
+    if (newTotal >= SAMPLE_MIN_WORDS && newTotal <= SAMPLE_MAX_WORDS) {
+      picked.push(sentence.trim());
+      return picked.join(" ").trim();
+    }
+
+    // Edge case: still under the floor, but the next whole sentence would
+    // overshoot the ceiling - neither rule can be fully honored, so the
+    // floor wins (it was called the "hard" limit) and we cut mid-sentence.
+    if (newTotal > SAMPLE_MAX_WORDS) {
+      const remaining = SAMPLE_MAX_WORDS - accumulated;
+      picked.push(sentenceWords.slice(0, remaining).join(" "));
+      return picked.join(" ").trim();
+    }
+
+    // Still under the floor - keep accumulating whole sentences.
+    picked.push(sentence.trim());
+    accumulated = newTotal;
+  }
+
+  return picked.join(" ").trim(); // ran out of text under 40 words total
+}
+
+function getAuditionText(preferredText) {
+  if (preferredText && preferredText.trim().length > 0) {
+    return buildAuditionSample(preferredText.trim());
+  }
+  const fullSpeech = segments.filter(s => s.type === "speech").map(s => s.text).join(" ").trim();
+  if (fullSpeech) return buildAuditionSample(fullSpeech);
+  return GENERIC_SAMPLE;
+}
+
+// Determine which rate/pitch/volume to audition with: the highlighted
+// passage's own settings if we're mid-selection, else the global defaults.
+function getAuditionStyle() {
+  if (pendingSelection) {
+    const i0 = findIndex(pendingSelection.startId);
+    if (i0 !== -1 && segments[i0] && segments[i0].type === "speech") {
+      const s = segments[i0];
+      return { rate: s.rate, pitch: s.pitch, volume: s.volume };
+    }
+  }
+  return { rate: defaultRate, pitch: effectivePitch(), volume: effectiveVolume() };
+}
+
+function auditionVoice(voiceId, preferredText, btn) {
+  const wasThisPlaying = !!(btn && activePlayButton === btn);
+  stopActivePlayback();
+  if (wasThisPlaying) return; // this button's own click while playing = toggle off
+
+  if (!window.speechSynthesis) { alert("Voice preview isn't supported in this browser."); return; }
+
+  const text = getAuditionText(preferredText);
+  const style = getAuditionStyle();
+  const myToken = ++playToken;
+  if (btn) { setPlayBtnStarting(btn); activePlayButton = btn; }
+
+  const utter = new SpeechSynthesisUtterance(text);
+  const bv = pickBrowserVoice(voiceId);
+  if (bv) utter.voice = bv;
+  utter.rate = clampRateVal(style.rate);
+  utter.pitch = clampPitchVal(style.pitch);
+  utter.volume = clampVolumeVal(style.volume);
+
+  let didStart = false;
+  const finish = (failed) => {
+    if (myToken !== playToken) return; // superseded by something else already
+    clearTimeout(safetyTimer);
+    clearTimeout(startTimeout);
+    stopSpeechKeepAlive();
+    if (activePlayButton === btn) { resetPlayBtnUI(btn); activePlayButton = null; }
+    if (failed && !didStart) {
+      alert(`"${bv ? bv.name : "This voice"}" failed to play in this browser. Try a different voice, or check the console (F12) for details.`);
+    }
+  };
+  const startTimeout = setTimeout(() => { if (!didStart) finish(true); }, 8000);
+  const safetyTimer = setTimeout(() => finish(true), estimateSpeechMs(text, style.rate) + 6000);
+  utter.onstart = () => { didStart = true; clearTimeout(startTimeout); startSpeechKeepAlive(); if (btn && activePlayButton === btn) setPlayBtnUI(btn); };
+  utter.onend = () => finish(false);
+  utter.onerror = () => finish(true);
+
+  // Small delay before speak() avoids a known Chrome quirk where calling
+  // speak() immediately after cancel() can silently drop the utterance.
+  setTimeout(() => { if (myToken === playToken) { window.speechSynthesis.resume(); window.speechSynthesis.speak(utter); } }, 60);
+}
+
+let playQueue = [];
+let playIndex = 0;
+let isPlaying = false;
+
+let queueCompletionCallback = null;
+
+let queueHadAnyStart = false;
+let queueErrorCount = 0;
+let queueSpeechCount = 0;
+
+function playQueueSegments(queueSegs, btn, onComplete) {
+  const wasThisPlaying = !!(btn && activePlayButton === btn);
+  stopActivePlayback();
+  if (wasThisPlaying) return;
+  if (!window.speechSynthesis) { alert("Speech preview isn't supported in this browser."); return; }
+
+  playQueue = queueSegs;
+  playIndex = 0;
+  isPlaying = true;
+  queueCompletionCallback = onComplete || null;
+  queueHadAnyStart = false;
+  queueErrorCount = 0;
+  queueSpeechCount = queueSegs.filter(s => s.type === "speech").length;
+  document.getElementById("playhead").style.display = "block";
+  if (btn) { setPlayBtnStarting(btn); activePlayButton = btn; }
+  const myToken = ++playToken;
+  playNext(btn, myToken);
+}
+
+function fireQueueCompletion() {
+  if (queueCompletionCallback) {
+    const cb = queueCompletionCallback;
+    queueCompletionCallback = null;
+    cb();
+  }
+}
+
+document.getElementById("playAllBtn").onclick = function () {
+  playQueueSegments(segments, this);
+};
+document.getElementById("stopBtn").onclick = () => {
+  stopActivePlayback();
+};
+
+function playNext(ownerBtn, token) {
+  if (token !== playToken) return; // a newer/older action has already taken over
+  if (!isPlaying || playIndex >= playQueue.length) {
+    isPlaying = false;
+    stopSpeechKeepAlive();
+    document.getElementById("playhead").style.display = "none";
+    document.querySelectorAll(".tblock.playing").forEach(b => b.classList.remove("playing"));
+    if (activePlayButton === ownerBtn) { resetPlayBtnUI(ownerBtn); activePlayButton = null; }
+    fireQueueCompletion();
+    console.log("[playNext] queue finished, index", playIndex, "of", playQueue.length);
+    if (queueErrorCount > 0 && queueSpeechCount > 0) {
+      if (!queueHadAnyStart) {
+        alert(`Playback failed — none of the ${queueSpeechCount} passage(s) could actually play in this browser. Try a different voice, or check the console (F12) for details.`);
+      } else {
+        alert(`${queueErrorCount} of ${queueSpeechCount} passage(s) failed to play and were skipped. Check the console (F12) for details.`);
+      }
+    }
+    return;
+  }
+  const seg = playQueue[playIndex];
+  const block = document.querySelector(`.tblock[data-id="${seg.id}"]`);
+  document.querySelectorAll(".tblock.playing").forEach(b => b.classList.remove("playing"));
+  if (block) block.classList.add("playing");
+
+  if (seg.type === "pause") {
+    console.log(`[playNext] segment ${playIndex}: pause ${seg.ms}ms`);
+    setTimeout(() => {
+      if (token !== playToken) return;
+      playIndex++;
+      playNext(ownerBtn, token);
+    }, seg.ms);
+    return;
+  }
+
+  const utter = new SpeechSynthesisUtterance(seg.text);
+  const bv = forcedChapterVoice || pickBrowserVoice(seg.voice);
+  if (bv) utter.voice = bv;
+  utter.rate = clampRateVal(seg.rate);
+  utter.pitch = clampPitchVal(seg.pitch);
+  utter.volume = clampVolumeVal(seg.volume);
+  console.log(`[playNext] segment ${playIndex}/${playQueue.length}: voice="${bv ? bv.name : "(browser default - none matched)"}" rate=${seg.rate} text="${seg.text.slice(0, 40)}..."`);
+
+  let segStarted = false;
+  const advance = (reason, failed) => {
+    console.log(`[playNext] segment ${playIndex} advancing, reason: ${reason}`);
+    if (failed && !segStarted) queueErrorCount++;
+    if (token !== playToken) return;
+    clearTimeout(safetyTimer);
+    clearTimeout(startTimeout);
+    playIndex++;
+    playNext(ownerBtn, token);
+  };
+  // Fast, independent check for "never even started" - a long passage's
+  // full-duration safety net (below) could otherwise take minutes to give
+  // up, leaving the button looking stuck with no feedback the whole time.
+  const startTimeout = setTimeout(() => {
+    if (!segStarted) advance("START TIMEOUT - never began speaking after 8s", true);
+  }, 8000);
+  const safetyTimer = setTimeout(() => advance("SAFETY TIMER fired - onend/onerror never fired", true), estimateSpeechMs(seg.text, seg.rate) + 6000);
+  utter.onstart = () => {
+    segStarted = true;
+    clearTimeout(startTimeout);
+    startSpeechKeepAlive();
+    console.log(`[playNext] segment ${playIndex}: onstart fired (actually began speaking)`);
+    if (!queueHadAnyStart) {
+      queueHadAnyStart = true;
+      if (activePlayButton === ownerBtn) setPlayBtnUI(ownerBtn); // confirm real playback - swap from "starting" to "stop"
+    }
+  };
+  utter.onend = () => advance("onend (finished normally)", false);
+  utter.onerror = (e) => advance("onerror: " + (e && e.error ? e.error : "unknown"), true);
+
+  setTimeout(() => {
+    if (token === playToken) {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utter);
+      console.log(`[playNext] segment ${playIndex}: speak() called, speechSynthesis.speaking=`, window.speechSynthesis.speaking, "pending=", window.speechSynthesis.pending);
+    }
+  }, 60);
+}
+
+
+// ---------------------------------------------------------------------------
+// Narration defaults (Speed / Pitch / Tone sliders)
+// ---------------------------------------------------------------------------
+function fmtSigned(n, unit) { return `${n >= 0 ? "+" : ""}${n}${unit}`; }
+function toneLabel(t) {
+  if (t <= -25) return "very subdued";
+  if (t <= -8) return "subdued";
+  if (t < 8) return "neutral";
+  if (t < 25) return "emphatic";
+  return "very emphatic";
+}
+
+function applyDefaultsToUnmodifiedSegments() {
+  const pitch = effectivePitch();
+  const volume = effectiveVolume();
+  segments.forEach(s => {
+    if (s.type === "speech" && !s.customDelivery) {
+      s.rate = defaultRate;
+      s.pitch = pitch;
+      s.volume = volume;
+    }
+  });
+  renderManuscript();
+}
+
+const rateSlider = document.getElementById("rateSlider");
+const pitchSlider = document.getElementById("pitchSlider");
+const toneSlider = document.getElementById("volumeSlider");
+
+rateSlider.addEventListener("input", () => {
+  defaultRate = parseInt(rateSlider.value, 10);
+  document.getElementById("rateVal").textContent = fmtSigned(defaultRate, "%");
+  applyDefaultsToUnmodifiedSegments();
+});
+pitchSlider.addEventListener("input", () => {
+  defaultPitch = parseInt(pitchSlider.value, 10);
+  document.getElementById("pitchVal").textContent = fmtSigned(defaultPitch, "Hz");
+  applyDefaultsToUnmodifiedSegments();
+});
+toneSlider.addEventListener("input", () => {
+  defaultTone = parseInt(toneSlider.value, 10);
+  document.getElementById("volumeVal").textContent = `${fmtSigned(defaultTone, "%")} · ${toneLabel(defaultTone)}`;
+  applyDefaultsToUnmodifiedSegments();
+});
+document.getElementById("resetDefaultsBtn").onclick = () => {
+  defaultRate = -8; defaultPitch = 0; defaultTone = 0;
+  rateSlider.value = defaultRate; pitchSlider.value = defaultPitch; toneSlider.value = defaultTone;
+  document.getElementById("rateVal").textContent = fmtSigned(defaultRate, "%");
+  document.getElementById("pitchVal").textContent = fmtSigned(defaultPitch, "Hz");
+  document.getElementById("volumeVal").textContent = `${fmtSigned(defaultTone, "%")} · ${toneLabel(defaultTone)}`;
+  applyDefaultsToUnmodifiedSegments();
+};
+
+// ---------------------------------------------------------------------------
+// Shared audio-encoding helpers — used by the recording feature to turn a
+// captured tab-audio recording into a real MP3.
+// ---------------------------------------------------------------------------
+function floatTo16BitPCM(float32Array) {
+  const out = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+function encodeMp3(int16Samples, sampleRate, kbps) {
+  const encoder = new lamejs.Mp3Encoder(1, sampleRate, kbps);
+  const blockSize = 1152;
+  const chunks = [];
+  for (let i = 0; i < int16Samples.length; i += blockSize) {
+    const chunk = int16Samples.subarray(i, i + blockSize);
+    const buf = encoder.encodeBuffer(chunk);
+    if (buf.length > 0) chunks.push(new Int8Array(buf));
+  }
+  const end = encoder.flush();
+  if (end.length > 0) chunks.push(new Int8Array(end));
+  return new Blob(chunks, { type: "audio/mpeg" });
+}
+
+// ---------------------------------------------------------------------------
+// Record chapter as MP3 via tab-audio capture — no API key, no Python.
+// Captures whatever's actually playing (the free preview voices) while it
+// reads the whole chapter, then encodes the recording as a genuine MP3
+// using lamejs.
+// ---------------------------------------------------------------------------
+let activeRecorder = null;
+let recordedChunks = [];
+
+function setRecordBtnUI(state) {
+  const btn = document.getElementById("recordBtn");
+  if (state === "recording") {
+    btn.textContent = "■ Stop recording early";
+    btn.dataset.recording = "1";
+    btn.disabled = false;
+  } else if (state === "processing") {
+    btn.textContent = "Encoding MP3…";
+    btn.dataset.recording = "1";
+    btn.disabled = true;
+  } else {
+    btn.textContent = "⏺ Record chapter as MP3";
+    delete btn.dataset.recording;
+    btn.disabled = segments.length === 0;
+  }
+}
+
+async function finalizeRecording() {
+  setRecordBtnUI("processing");
+  try {
+    const webmBlob = new Blob(recordedChunks, { type: "audio/webm" });
+    if (webmBlob.size === 0) throw new Error("No audio was captured — was 'Share tab audio' checked?");
+    const arrayBuffer = await webmBlob.arrayBuffer();
+    const ctx = getAudioCtx();
+    const audioBuffer = await new Promise((resolve, reject) => ctx.decodeAudioData(arrayBuffer, resolve, reject));
+    const pcm = audioBuffer.getChannelData(0);
+    const int16 = floatTo16BitPCM(pcm);
+    const mp3Blob = encodeMp3(int16, audioBuffer.sampleRate, 128);
+
+    const title = document.getElementById("chapterTitle").value || "chapter";
+    const filename = title.replace(/[^\w\-]+/g, "_") + "_recorded.mp3";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(mp3Blob);
+    a.download = filename;
+    a.click();
+
+    const minutes = (audioBuffer.duration / 60).toFixed(1);
+    alert(`Done — downloaded ${filename} (~${minutes} min of audio).`);
+  } catch (err) {
+    alert("Recording finished, but converting it to MP3 failed: " + (err.message || err));
+  } finally {
+    setRecordBtnUI("idle");
+  }
+}
+
+async function startTabRecording() {
+  if (segments.length === 0) { alert("Load a chapter first."); return; }
+
+  let displayStream;
+  try {
+    displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  } catch (err) {
+    return; // user cancelled the picker - not an error worth alerting about
+  }
+
+  const audioTracks = displayStream.getAudioTracks();
+  if (audioTracks.length === 0) {
+    displayStream.getTracks().forEach(t => t.stop());
+    alert('No tab audio was captured. When the picker appears, choose "This Tab" and make sure "Share tab audio" is checked, then try again.');
+    return;
+  }
+  displayStream.getVideoTracks().forEach(t => t.stop()); // we only want the audio
+
+  const audioOnlyStream = new MediaStream(audioTracks);
+  recordedChunks = [];
+  const mimeType = (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/webm;codecs=opus"))
+    ? "audio/webm;codecs=opus" : "audio/webm";
+  activeRecorder = new MediaRecorder(audioOnlyStream, { mimeType });
+  activeRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  activeRecorder.onstop = () => {
+    audioTracks.forEach(t => t.stop());
+    activeRecorder = null;
+    finalizeRecording();
+  };
+
+  setRecordBtnUI("recording");
+  activeRecorder.start();
+
+  // Brief head start so the recording doesn't clip the very first word,
+  // then read the whole chapter using whatever engine is currently active.
+  setTimeout(() => {
+    playQueueSegments(segments, null, () => {
+      setTimeout(() => {
+        if (activeRecorder && activeRecorder.state !== "inactive") activeRecorder.stop();
+      }, 800); // brief tail so the last word isn't clipped either
+    });
+  }, 300);
+}
+
+document.getElementById("recordBtn").addEventListener("click", () => {
+  if (activeRecorder && activeRecorder.state === "recording") {
+    stopActivePlayback(); // stop the chapter read early
+    activeRecorder.stop(); // triggers onstop -> finalizeRecording()
+    return;
+  }
+  startTabRecording();
+});
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+renderDefaultVoiceList();
+renderInstalledVoicesList();
+updateChapterVoiceStatus();
+renderManuscript();
+
+</script>
+</body>
+</html>
